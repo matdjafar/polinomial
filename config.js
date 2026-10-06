@@ -1,0 +1,3 @@
+﻿// Konfigurasi Database Supabase
+window.SUPABASE_URL = "https://mqzmhddhcyvigefflyqz.supabase.co/";
+window.SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xem1oZGRoY3l2aWdlZmZseXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyOTU0MzgsImV4cCI6MjEwNjg3MTQzOH0.S-VJ562yj_vVDymtzuK6WJs0CPKVkatPNFBiiuxUYVs";

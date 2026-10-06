@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel Guru - Polinomial CBT</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* Styling Tambahan untuk Panel Guru agar lebih modern */
+    .dashboard-header {
+       display: flex;
+       justify-content: space-between;
+       align-items: center;
+       background: rgba(255,255,255,0.05);
+       padding: 20px;
+       border-radius: 12px;
+       margin-bottom: 25px;
+       border: 1px solid rgba(255,255,255,0.1);
+    }
+    .btn-export {
+       background: #10B981; /* Emerald green for Excel */
+       color: white;
+    }
+    .btn-export:hover {
+       background: #059669;
+    }
+    .table-rekap {
+       width: 100%;
+       border-collapse: collapse;
+       margin-top: 15px;
+    }
+    .table-rekap th, .table-rekap td {
+       padding: 12px 15px;
+       text-align: left;
+       border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .table-rekap th {
+       background: rgba(255,255,255,0.1);
+       color: var(--text-muted);
+       font-weight: 600;
+    }
+    .table-rekap tr:hover {
+       background: rgba(255,255,255,0.02);
+    }
+  </style>
+</head>
+<body>
+  <div id="loginGuru" class="setup-container">
+    <div style="text-align:center; margin-bottom:30px;">
+      <h1 style="color:var(--mudah); margin-bottom:10px;">Panel Guru</h1>
+      <p style="color:var(--text-muted);">Masukkan PIN Akses Guru</p>
+    </div>
+    <input type="password" id="pinGuru" class="form-control" placeholder="******" style="margin-bottom:20px; text-align:center; font-size:1.5rem; letter-spacing: 5px;">
+    <button id="btnAuth" class="btn" style="width:100%; padding:15px; font-size:1.1rem;">Masuk Dashboard</button>
+  </div>
+
+  <div id="panelGuru" class="container" style="display:none; max-width: 1000px;">
+    <div class="dashboard-header">
+      <div>
+        <h1 style="margin:0; font-size: 1.8rem; background: linear-gradient(90deg, #60A5FA, #A78BFA); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Dashboard Kontrol Guru</h1>
+        <p style="margin:5px 0 0 0; color:var(--text-muted); font-size:0.9rem;">Kelola sesi CBT dan pantau hasil siswa secara real-time</p>
+      </div>
+      <div>
+        <button class="btn btn-outline" onclick="loadRekap()">🔄 Refresh Data</button>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:25px;">
+      <!-- Pengaturan -->
+      <div class="leaderboard-panel" style="align-self: start;">
+        <h3 style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">⚙️ Pengaturan Server</h3>
+        
+        <label style="display:block; margin-bottom:8px; color:var(--text-muted);">Buka Akses Soal</label>
+        <select id="setAkses" class="form-control" style="margin-bottom:20px;" onchange="simpanSet()">
+          <option value="true">✅ Dibuka (Siswa bisa login)</option>
+          <option value="false">🔒 Ditutup</option>
+        </select>
+
+        <label style="display:block; margin-bottom:8px; color:var(--text-muted);">Tampilkan Pembahasan</label>
+        <select id="setBahas" class="form-control" style="margin-bottom:20px;" onchange="simpanSet()">
+          <option value="false">❌ Sembunyikan</option>
+          <option value="true">👁️ Tampilkan setelah dijawab</option>
+        </select>
+        
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:25px 0;">
+        
+        <h3 style="color:var(--sulit); margin-bottom:15px;">⚠️ Zona Berbahaya</h3>
+        <button class="btn" style="background:var(--sulit); width:100%; padding:12px;" onclick="resetSesi()">Reset Seluruh Sesi (Hapus Data)</button>
+      </div>
+
+      <!-- Rekap -->
+      <div class="leaderboard-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
+           <h3 style="margin:0;">📊 Rekap Nilai Siswa</h3>
+           <button class="btn btn-export" onclick="exportToCSV()">📥 Ekspor Excel (CSV)</button>
+        </div>
+        
+        <div style="overflow-x:auto;">
+           <table class="table-rekap">
+             <thead>
+               <tr>
+                 <th>Kel.</th>
+                 <th>Nama Siswa</th>
+                 <th>Total Benar</th>
+                 <th>Total Poin</th>
+               </tr>
+             </thead>
+             <tbody id="tbRekap">
+                <tr><td colspan="4" style="text-align:center; padding:30px; color:var(--text-muted);">Memuat data...</td></tr>
+             </tbody>
+           </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="assets/api.js"></script>
+  <script>
+    let rekapData = [];
+
+    document.getElementById('btnAuth').onclick = () => {
+      let pin = document.getElementById('pinGuru').value;
+      if(pin === "123456") {
+         document.getElementById('loginGuru').style.display = 'none';
+         document.getElementById('panelGuru').style.display = 'block';
+         loadStateSettings();
+         loadRekap();
+      } else {
+         alert("PIN Salah! Coba lagi.");
+      }
+    };
+
+    async function loadStateSettings() {
+      try {
+        let st = await window.API.call('getState');
+        document.getElementById('setAkses').value = st.pengaturan.bukaAkses ? 'true' : 'false';
+        document.getElementById('setBahas').value = st.pengaturan.tampilPembahasan ? 'true' : 'false';
+      } catch(e) { console.error(e); }
+    }
+
+    async function simpanSet() {
+      try {
+        let akses = document.getElementById('setAkses').value === 'true';
+        let bahas = document.getElementById('setBahas').value === 'true';
+        await window.API.call('updatePengaturan', { bukaAkses: akses, tampilPembahasan: bahas });
+        
+        let select = document.activeElement;
+        let origBg = select.style.background;
+        select.style.background = 'rgba(16, 185, 129, 0.2)'; // Flash green
+        setTimeout(() => select.style.background = origBg, 500);
+      } catch(e) { alert("Gagal menyimpan: " + e.message); }
+    }
+
+    async function loadRekap() {
+      try {
+        let btn = document.querySelector('.dashboard-header .btn-outline');
+        btn.innerText = "⏳ Memuat...";
+        
+        let data = await window.API.call('getRekap');
+        let map = {};
+        
+        // Kalkulasi poin dari logJawaban yang BENAR
+        data.logJawaban.forEach(log => {
+           if(log.isBenar) {
+               let key = log.kelompok + "|" + log.nama;
+               if(!map[key]) map[key] = { kelompok: log.kelompok, nama: log.nama, bnr: 0, poin: 0 };
+               map[key].bnr++;
+               map[key].poin += log.poinDidapat;
+           }
+        });
+        
+        rekapData = Object.values(map);
+        rekapData.sort((a,b) => b.poin - a.poin || a.kelompok.localeCompare(b.kelompok));
+        
+        let html = '';
+        rekapData.forEach(r => {
+          html += `<tr>
+            <td><span class="badge" style="background:var(--menengah)">Kel ${r.kelompok}</span></td>
+            <td style="font-weight:500;">${r.nama}</td>
+            <td>${r.bnr} Soal</td>
+            <td style="color:var(--mudah); font-weight:bold; font-size:1.1rem;">${r.poin}</td>
+          </tr>`;
+        });
+        
+        document.getElementById('tbRekap').innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--text-muted);">Belum ada siswa yang menjawab benar.</td></tr>';
+        
+        btn.innerText = "🔄 Refresh Data";
+      } catch(e) { 
+        alert(e.message); 
+        document.querySelector('.dashboard-header .btn-outline').innerText = "🔄 Refresh Data";
+      }
+    }
+
+    async function resetSesi() {
+      if(!confirm("YAKIN INGIN MERESET SEMUA DATA? INI TIDAK BISA DIBATALKAN!")) return;
+      if(!confirm("Semua jawaban, skor, dan status soal akan terhapus. Lanjutkan?")) return;
+      try {
+        await window.API.call('resetData');
+        alert("Sesi berhasil direset.");
+        loadRekap();
+      } catch(e) { alert(e.message); }
+    }
+    
+    function exportToCSV() {
+       if(rekapData.length === 0) return alert("Tidak ada data untuk diekspor!");
+       
+       let csvContent = "data:text/csv;charset=utf-8,";
+       csvContent += "Kelompok,Nama Siswa,Jumlah Benar,Total Poin\n";
+       
+       rekapData.forEach(r => {
+          let row = `"${r.kelompok}","${r.nama}","${r.bnr}","${r.poin}"`;
+          csvContent += row + "\n";
+       });
+       
+       let encodedUri = encodeURI(csvContent);
+       let link = document.createElement("a");
+       link.setAttribute("href", encodedUri);
+       link.setAttribute("download", `Rekap_Nilai_Polinomial_${new Date().toISOString().slice(0,10)}.csv`);
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
