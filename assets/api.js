@@ -6,24 +6,48 @@ const API = {
     if (action === 'getState') {
       let { data: pengData } = await supabase.from('arena_pengaturan').select('*').eq('id', 1).single();
       let { data: statusData } = await supabase.from('arena_status_soal').select('*');
+      let { data: logData } = await supabase.from('arena_log_jawaban').select('kelompok, is_benar, poin_didapat');
+      
+      // Hitung skor per kelompok
+      let skorMap = {};
+      (logData || []).forEach(log => {
+         if (log.is_benar) {
+            if (!skorMap[log.kelompok]) skorMap[log.kelompok] = 0;
+            skorMap[log.kelompok] += log.poin_didapat;
+         }
+      });
+      let skorKelompok = Object.keys(skorMap).map(k => ({ kelompok: k, poin: skorMap[k] }));
+      
+      // Default pengaturan mock
+      let modeKunci = 'PER_KELOMPOK';
       
       return {
         pengaturan: {
           bukaAkses: pengData ? pengData.buka_akses : true,
-          tampilPembahasan: pengData ? pengData.tampil_pembahasan : false
+          tampilPembahasan: pengData ? pengData.tampil_pembahasan : false,
+          tampilSkor: true,
+          modeKunci: modeKunci,
+          targetPoin: 2000,
+          paketAktif: 1
         },
-        statusSoal: (statusData || []).map(row => ({
-          paket: row.paket,
-          idSoal: row.id_soal,
-          kelompok: row.kelompok,
-          nama: row.nama,
-          status: row.status
-        }))
+        skorKelompok: skorKelompok,
+        statusSoal: (statusData || []).map(row => {
+          let st = row.status;
+          if (st === 'selesai') st = 'terjawab';
+          if (st === 'salah') st = 'hangus';
+          return {
+            key: modeKunci === 'GLOBAL' ? row.paket + '_' + row.id_soal + '_GLOBAL' : row.paket + '_' + row.id_soal + '_' + row.kelompok,
+            paket: row.paket,
+            idSoal: row.id_soal,
+            kelompok: row.kelompok,
+            nama: row.nama,
+            status: st
+          };
+        })
       };
     }
     
     if (action === 'bukaSoal') {
-      // Hapus status lama jika ada (agar tidak double)
       await supabase.from('arena_status_soal')
             .delete()
             .match({ paket: payload.paket, id_soal: payload.idSoal, kelompok: payload.kelompok });
@@ -50,7 +74,6 @@ const API = {
       let statusStr = payload.isBenar ? 'selesai' : 'salah';
       let finalPoin = payload.isBenar ? payload.poinLevel : 0;
       
-      // Update status soal
       await supabase.from('arena_status_soal')
             .delete()
             .match({ paket: payload.paket, id_soal: payload.idSoal, kelompok: payload.kelompok });
@@ -63,7 +86,6 @@ const API = {
         status: statusStr
       }]);
       
-      // Insert log jawaban
       await supabase.from('arena_log_jawaban').insert([{
         kelompok: payload.kelompok,
         nama: payload.nama,
@@ -77,7 +99,6 @@ const API = {
       return { success: true };
     }
     
-    // Khusus Panel Guru
     if (action === 'updatePengaturan') {
       await supabase.from('arena_pengaturan')
             .update({ buka_akses: payload.bukaAkses, tampil_pembahasan: payload.tampilPembahasan })
@@ -101,7 +122,7 @@ const API = {
           idSoal: row.id_soal,
           kelompok: row.kelompok,
           nama: row.nama,
-          status: row.status
+          status: row.status === 'selesai' ? 'terjawab' : (row.status === 'salah' ? 'hangus' : row.status)
         })),
         logJawaban: (logData || []).map(row => ({
           waktu: row.waktu,
