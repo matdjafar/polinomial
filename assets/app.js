@@ -253,8 +253,8 @@ async function onSoalClick(globalId) {
     
     currentSoalId = globalId;
     document.getElementById('mId').innerText = globalId;
-    document.getElementById('mLevelBadge').innerText = soalData.level;
-    document.getElementById('mLevelBadge').style.background = `var(--${soalData.level.toLowerCase()})`;
+    document.getElementById('mLevelBadge').innerText = localId <= 10 ? 'Mudah' : (localId <= 20 ? 'Sedang' : 'Sulit');
+    document.getElementById('mLevelBadge').style.background = localId <= 10 ? 'var(--mudah)' : (localId <= 20 ? 'var(--menengah)' : 'var(--sulit)');
     document.getElementById('mPoin').innerText = soalData.poin;
     document.getElementById('mSoalTeks').innerHTML = cleanMathString(soalData.soal);
     
